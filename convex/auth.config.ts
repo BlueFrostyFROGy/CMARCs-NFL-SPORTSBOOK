@@ -1,7 +1,8 @@
 export default {
   providers: [
     {
-      domain: process.env.CONVEX_SITE_URL ?? "https://cmarcsnflsportsbook.vercel.app",
+      // Use Convex site domain for auth flows
+      domain: "https://incredible-akita-72.convex.site",
       applicationID: "convex",
     },
   ],
