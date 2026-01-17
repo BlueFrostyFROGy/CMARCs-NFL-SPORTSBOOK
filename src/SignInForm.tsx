@@ -47,25 +47,9 @@ export function SignInForm() {
     }
   };
 
-  const handleAnonymous = async () => {
-    setSubmitting(true);
-    try {
-      console.log("[Auth] Starting anonymous sign-in");
-      const result = await signIn("anonymous");
-      console.log("[Auth] Anonymous sign-in succeeded", result);
-      // On success, ConvexAuthProvider will handle the app state
-    } catch (error: any) {
-      console.error("[Auth] Anonymous sign-in failed:", error);
-      toast.error(
-        error?.message || "Anonymous sign-in failed. Please try again."
-      );
-      setSubmitting(false);
-    }
-  };
-
   return (
     <div className="w-full max-w-sm mx-auto">
-      <form onSubmit={handlePasswordAuth} className="flex flex-col gap-4 mb-6">
+      <form onSubmit={handlePasswordAuth} className="flex flex-col gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Email
@@ -108,24 +92,6 @@ export function SignInForm() {
               : "Create Account"}
         </button>
       </form>
-
-      <div className="relative mb-6">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300"></div>
-        </div>
-        <div className="relative flex justify-center text-sm">
-          <span className="px-2 bg-white text-gray-500">or</span>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={handleAnonymous}
-        disabled={submitting}
-        className="w-full bg-gray-200 text-gray-900 py-2 rounded-lg font-semibold hover:bg-gray-300 disabled:bg-gray-100 transition"
-      >
-        {submitting ? "Loading..." : "Continue Anonymously"}
-      </button>
 
       <div className="text-center mt-6">
         <button
