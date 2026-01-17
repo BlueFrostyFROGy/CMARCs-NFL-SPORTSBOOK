@@ -37,21 +37,24 @@ export const createUser = mutation({
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", authUser.email))
         .first();
+      
+      if (existingUser) {
+        return existingUser._id;
+      }
     }
 
-    const username = 
-      (authUser as any).name || 
-      (authUser.email ? authUser.email.split("@")[0] : undefined) || 
-      `User${Math.floor(Math.random() * 10000)}`;
-
-    if (existingUser) {
-      return existingUser._id;
+    // Generate username with fallback
+    let username = `User${Math.floor(Math.random() * 100000)}`;
+    if ((authUser as any).name) {
+      username = (authUser as any).name;
+    } else if (authUser.email) {
+      username = authUser.email.split("@")[0];
     }
 
-    // Create new user
-    return await ctx.db.insert("users", {
-      email: authUser.email || undefined,
-      username,
+    // Create new user with all fields
+    const newUserId = await ctx.db.insert("users", {
+      email: authUser.email,
+      username: username,
       virtualBalance: 100,
       isAdmin: false,
       lifetimeProfit: 0,
@@ -60,6 +63,8 @@ export const createUser = mutation({
       losses: 0,
       pushes: 0,
     });
+
+    return newUserId;
   },
 });
 
