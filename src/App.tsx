@@ -16,12 +16,11 @@ export default function App() {
 
   // Auto-create user if authenticated but no user record exists
   useEffect(() => {
-    // Temporarily disabled to debug auth issues
-    // if (user === null && user !== undefined) {
-    //   createUser().catch((error) => {
-    //     console.error("Failed to create user:", error);
-    //   });
-    // }
+    if (user === null && user !== undefined) {
+      createUser().catch((error) => {
+        console.error("Failed to create user:", error);
+      });
+    }
   }, [user, createUser]);
 
   return (
