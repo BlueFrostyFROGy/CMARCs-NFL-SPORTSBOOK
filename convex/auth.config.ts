@@ -1,8 +1,8 @@
 export default {
   providers: [
     {
-      // Use Convex site domain for auth flows
-      domain: "https://incredible-akita-72.convex.site",
+      // Use dynamic domain from env; provided by Vercel build
+      domain: process.env.CONVEX_SITE_URL,
       applicationID: "convex",
     },
   ],
