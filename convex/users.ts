@@ -24,47 +24,60 @@ export const getCurrentUser = query({
 export const createUser = mutation({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
-    
-    const authUser = await ctx.db.get(userId);
-    if (!authUser) throw new Error("Auth user not found");
-
-    // Check if user already exists by email
-    let existingUser = null;
-    if (authUser.email) {
-      existingUser = await ctx.db
-        .query("users")
-        .withIndex("by_email", (q) => q.eq("email", authUser.email))
-        .first();
+    try {
+      const userId = await getAuthUserId(ctx);
+      if (!userId) throw new Error("Not authenticated");
       
-      if (existingUser) {
-        return existingUser._id;
+      const authUser = await ctx.db.get(userId);
+      if (!authUser) throw new Error("Auth user not found");
+
+      // Check if user already exists by email
+      if (authUser.email) {
+        const existingUser = await ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", authUser.email))
+          .first();
+        
+        if (existingUser) {
+          return existingUser._id;
+        }
       }
+
+      // Generate username with multiple fallbacks
+      let username: string | undefined = undefined;
+      
+      if ((authUser as any).name && (authUser as any).name.trim()) {
+        username = (authUser as any).name;
+      } else if (authUser.email) {
+        const emailPart = authUser.email.split("@")[0];
+        if (emailPart && emailPart.trim()) {
+          username = emailPart;
+        }
+      }
+      
+      // Always have a fallback
+      if (!username) {
+        username = `User${Math.floor(Math.random() * 1000000)}`;
+      }
+
+      // Create new user
+      const newUserId = await ctx.db.insert("users", {
+        email: authUser.email,
+        username: username,
+        virtualBalance: 100,
+        isAdmin: false,
+        lifetimeProfit: 0,
+        totalBets: 0,
+        wins: 0,
+        losses: 0,
+        pushes: 0,
+      });
+
+      return newUserId;
+    } catch (error) {
+      console.error("createUser error:", error);
+      throw error;
     }
-
-    // Generate username with fallback
-    let username = `User${Math.floor(Math.random() * 100000)}`;
-    if ((authUser as any).name) {
-      username = (authUser as any).name;
-    } else if (authUser.email) {
-      username = authUser.email.split("@")[0];
-    }
-
-    // Create new user with all fields
-    const newUserId = await ctx.db.insert("users", {
-      email: authUser.email,
-      username: username,
-      virtualBalance: 100,
-      isAdmin: false,
-      lifetimeProfit: 0,
-      totalBets: 0,
-      wins: 0,
-      losses: 0,
-      pushes: 0,
-    });
-
-    return newUserId;
   },
 });
 
