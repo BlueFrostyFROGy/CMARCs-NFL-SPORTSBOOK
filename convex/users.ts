@@ -30,34 +30,25 @@ export const createUser = mutation({
     const authUser = await ctx.db.get(userId);
     if (!authUser) throw new Error("Auth user not found");
 
-    // Check if user already exists
-    const existingUser = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", authUser.email || ""))
-      .first();
+    // Check if user already exists by email
+    let existingUser = null;
+    if (authUser.email) {
+      existingUser = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", authUser.email))
+        .first();
+    }
 
-    const username = authUser.email
-      ? (authUser as any).name || authUser.email.split("@")[0]
-      : `User${Math.floor(Math.random() * 10000)}`;
+    const username = 
+      (authUser as any).name || 
+      (authUser.email ? authUser.email.split("@")[0] : undefined) || 
+      `User${Math.floor(Math.random() * 10000)}`;
 
     if (existingUser) {
-      // Ensure existing user has all required fields
-      if (!existingUser.username || existingUser.virtualBalance === undefined) {
-        await ctx.db.patch(existingUser._id, {
-          username: existingUser.username || username,
-          virtualBalance: existingUser.virtualBalance ?? 100,
-          isAdmin: existingUser.isAdmin ?? false,
-          lifetimeProfit: existingUser.lifetimeProfit ?? 0,
-          totalBets: existingUser.totalBets ?? 0,
-          wins: existingUser.wins ?? 0,
-          losses: existingUser.losses ?? 0,
-          pushes: existingUser.pushes ?? 0,
-        });
-      }
       return existingUser._id;
     }
 
-    // Create new user with $100 starting balance and leaderboard fields
+    // Create new user
     return await ctx.db.insert("users", {
       email: authUser.email || undefined,
       username,
