@@ -33,17 +33,20 @@ export const createUser = mutation({
     // Check if user already exists
     const existingUser = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", authUser.email || undefined))
+      .withIndex("by_email", (q) => q.eq("email", authUser.email || ""))
       .first();
+
+    const username = authUser.email
+      ? (authUser as any).name || authUser.email.split("@")[0]
+      : `User${Math.floor(Math.random() * 10000)}`;
 
     if (existingUser) {
       // Ensure existing user has all required fields
       if (!existingUser.username || existingUser.virtualBalance === undefined) {
         await ctx.db.patch(existingUser._id, {
-          username: existingUser.username || (authUser as any).name || authUser.email?.split("@")[0] || `User${Math.floor(Math.random() * 10000)}`,
-          virtualBalance: existingUser.virtualBalance ?? 100, // Updated to $100 starting balance
+          username: existingUser.username || username,
+          virtualBalance: existingUser.virtualBalance ?? 100,
           isAdmin: existingUser.isAdmin ?? false,
-          // Initialize leaderboard fields if missing
           lifetimeProfit: existingUser.lifetimeProfit ?? 0,
           totalBets: existingUser.totalBets ?? 0,
           wins: existingUser.wins ?? 0,
@@ -57,8 +60,8 @@ export const createUser = mutation({
     // Create new user with $100 starting balance and leaderboard fields
     return await ctx.db.insert("users", {
       email: authUser.email || undefined,
-      username: (authUser as any).name || authUser.email?.split("@")[0] || `User${Math.floor(Math.random() * 10000)}`,
-      virtualBalance: 100, // $100 starting balance
+      username,
+      virtualBalance: 100,
       isAdmin: false,
       lifetimeProfit: 0,
       totalBets: 0,
