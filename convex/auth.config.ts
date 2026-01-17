@@ -5,4 +5,7 @@ export default {
       applicationID: "convex",
     },
   ],
+  session: {
+    absoluteTimeout: 24 * 60 * 60 * 1000, // 24 hours
+  },
 };

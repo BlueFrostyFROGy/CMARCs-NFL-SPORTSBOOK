@@ -13,33 +13,36 @@ export function SignInForm() {
   const handlePasswordAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      toast.error("Please fill in all fields");
+      toast.error("Please fill in email and password");
       return;
     }
 
     setSubmitting(true);
     try {
-      await signIn("password", {
+      console.log(`[Auth] Starting ${flow} with email:`, email);
+      const result = await signIn("password", {
         email,
         password,
         flow,
       });
+      console.log(`[Auth] ${flow} succeeded`, result);
+      // On success, the ConvexAuthProvider will handle the redirect
     } catch (error: any) {
+      console.error(`[Auth] ${flow} failed:`, error);
       const errorMsg = error?.message || "Authentication failed";
+      console.error(`[Auth] Error message:`, errorMsg);
+      
       if (errorMsg.includes("INVALID_PASSWORD")) {
-        toast.error("Invalid password. Please try again.");
+        toast.error("Invalid email or password");
       } else if (errorMsg.includes("USER_NOT_FOUND")) {
-        toast.error("Account not found. Please sign up first.");
+        toast.error("No account found. Try signing up.");
       } else if (errorMsg.includes("already exists")) {
-        toast.error("This email is already registered. Please sign in instead.");
+        toast.error("Email already registered. Try signing in.");
+      } else if (errorMsg.includes("Invalid username")) {
+        toast.error("Invalid email format");
       } else {
-        toast.error(
-          flow === "signIn"
-            ? "Could not sign in. Please try again."
-            : "Could not sign up. Please try again."
-        );
+        toast.error(errorMsg || `${flow} failed. Please try again.`);
       }
-    } finally {
       setSubmitting(false);
     }
   };
@@ -47,18 +50,24 @@ export function SignInForm() {
   const handleAnonymous = async () => {
     setSubmitting(true);
     try {
-      await signIn("anonymous");
+      console.log("[Auth] Starting anonymous sign-in");
+      const result = await signIn("anonymous");
+      console.log("[Auth] Anonymous sign-in succeeded", result);
+      // On success, ConvexAuthProvider will handle the app state
     } catch (error: any) {
-      toast.error("Anonymous sign-in failed. Please try again.");
+      console.error("[Auth] Anonymous sign-in failed:", error);
+      toast.error(
+        error?.message || "Anonymous sign-in failed. Please try again."
+      );
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="w-full max-w-sm">
-      <form onSubmit={handlePasswordAuth} className="flex flex-col gap-4">
+    <div className="w-full max-w-sm mx-auto">
+      <form onSubmit={handlePasswordAuth} className="flex flex-col gap-4 mb-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Email
           </label>
           <input
@@ -68,11 +77,12 @@ export function SignInForm() {
             placeholder="you@example.com"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={submitting}
+            autoComplete="email"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Password
           </label>
           <input
@@ -82,53 +92,55 @@ export function SignInForm() {
             placeholder="••••••••"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={submitting}
+            autoComplete={flow === "signIn" ? "current-password" : "new-password"}
           />
         </div>
 
         <button
           type="submit"
           disabled={submitting}
-          className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50"
+          className="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-blue-400 transition"
         >
           {submitting
             ? "Loading..."
             : flow === "signIn"
               ? "Sign In"
-              : "Sign Up"}
+              : "Create Account"}
         </button>
       </form>
 
-      <div className="flex items-center gap-4 my-6">
-        <hr className="flex-1 border-gray-300" />
-        <span className="text-sm text-gray-500">or</span>
-        <hr className="flex-1 border-gray-300" />
+      <div className="relative mb-6">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-300"></div>
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="px-2 bg-white text-gray-500">or</span>
+        </div>
       </div>
 
       <button
+        type="button"
         onClick={handleAnonymous}
         disabled={submitting}
-        className="w-full bg-gray-100 text-gray-800 py-2 rounded-lg font-semibold hover:bg-gray-200 disabled:opacity-50"
+        className="w-full bg-gray-200 text-gray-900 py-2 rounded-lg font-semibold hover:bg-gray-300 disabled:bg-gray-100 transition"
       >
         {submitting ? "Loading..." : "Continue Anonymously"}
       </button>
 
-      <div className="text-center mt-4">
-        <p className="text-sm text-gray-600">
+      <div className="text-center mt-6">
+        <button
+          type="button"
+          onClick={() => {
+            setFlow(flow === "signIn" ? "signUp" : "signIn");
+            setEmail("");
+            setPassword("");
+          }}
+          className="text-sm text-blue-600 hover:underline"
+        >
           {flow === "signIn"
-            ? "Don't have an account? "
-            : "Already have an account? "}
-          <button
-            type="button"
-            onClick={() => {
-              setFlow(flow === "signIn" ? "signUp" : "signIn");
-              setEmail("");
-              setPassword("");
-            }}
-            className="text-blue-600 hover:underline font-medium"
-          >
-            {flow === "signIn" ? "Sign up" : "Sign in"}
-          </button>
-        </p>
+            ? "Don't have an account? Sign up"
+            : "Already have an account? Sign in"}
+        </button>
       </div>
     </div>
   );
