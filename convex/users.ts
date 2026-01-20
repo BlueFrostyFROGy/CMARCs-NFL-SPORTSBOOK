@@ -3,156 +3,111 @@ import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
 export const getCurrentUser = query({
-  args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
-    
-    const authUser = await ctx.db.get(userId);
-    if (!authUser) return null;
+    return await ctx.db.get(userId);
+  },
+});
 
-    // Check if user exists in our users table
+export const getUserById = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.userId);
+  },
+});
+
+export const getUserByEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
     const user = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", authUser.email || undefined))
+      .withIndex("by_email", (q) => q.eq("email", args.email))
       .first();
-
-    return user;
+    return user || null;
   },
 });
 
 export const createUser = mutation({
-  args: {},
   handler: async (ctx) => {
-    try {
-      const userId = await getAuthUserId(ctx);
-      if (!userId) throw new Error("Not authenticated");
-      
-      const authUser = await ctx.db.get(userId);
-      if (!authUser) throw new Error("Auth user not found");
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
 
-      // Check if user already exists by email
-      if (authUser.email) {
-        const existingUser = await ctx.db
-          .query("users")
-          .withIndex("by_email", (q) => q.eq("email", authUser.email))
-          .first();
-        
-        if (existingUser) {
-          return existingUser._id;
-        }
-      }
+    const existingUser = await ctx.db.get(userId);
+    if (existingUser) return existingUser;
 
-      // Generate username with multiple fallbacks
-      let username: string | undefined = undefined;
-      
-      if ((authUser as any).name && (authUser as any).name.trim()) {
-        username = (authUser as any).name;
-      } else if (authUser.email) {
-        const emailPart = authUser.email.split("@")[0];
-        if (emailPart && emailPart.trim()) {
-          username = emailPart;
-        }
-      }
-      
-      // Always have a fallback
-      if (!username) {
-        username = `User${Math.floor(Math.random() * 1000000)}`;
-      }
+    const user = await ctx.db.insert("users", {
+      virtualBalance: 100000,
+      isAdmin: false,
+      lifetimeProfit: 0,
+      totalBets: 0,
+      wins: 0,
+      losses: 0,
+      pushes: 0,
+    });
 
-      // Create new user
-      const newUserId = await ctx.db.insert("users", {
-        email: authUser.email,
-        username: username,
-        virtualBalance: 100,
-        isAdmin: false,
-        lifetimeProfit: 0,
-        totalBets: 0,
-        wins: 0,
-        losses: 0,
-        pushes: 0,
-      });
-
-      return newUserId;
-    } catch (error) {
-      console.error("createUser error:", error);
-      throw error;
-    }
+    return await ctx.db.get(user);
   },
 });
 
-export const updateBalance = mutation({
+export const updateUserProfile = mutation({
   args: {
-    userId: v.id("users"),
-    amount: v.number(),
+    username: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user) throw new Error("User not found");
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
 
-    await ctx.db.patch(args.userId, {
-      virtualBalance: (user.virtualBalance || 0) + args.amount,
-    });
+    const updates: { username?: string } = {};
+    if (args.username) updates.username = args.username;
+
+    await ctx.db.patch(userId, updates);
+    return await ctx.db.get(userId);
   },
 });
 
-// New leaderboard query
 export const getLeaderboard = query({
-  args: {},
-  handler: async (ctx) => {
-    const users = await ctx.db
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 100;
+    return await ctx.db
       .query("users")
-      .withIndex("by_lifetime_profit")
+      .withIndex("by_lifetime_profit", (q) => q.gte("lifetimeProfit", 0))
       .order("desc")
-      .take(50);
-
-    return users
-      .filter(user => user.lifetimeProfit !== undefined)
-      .map((user, index) => {
-        const totalBets = user.totalBets || 0;
-        const wins = user.wins || 0;
-        const decidedBets = totalBets - (user.pushes || 0);
-        const winRate = decidedBets > 0 ? (wins / decidedBets) * 100 : 0;
-        
-        return {
-          _id: user._id,
-          rank: index + 1,
-          username: user.username || "Anonymous",
-          lifetimeProfit: user.lifetimeProfit || 0,
-          totalBets,
-          wins,
-          losses: user.losses || 0,
-          pushes: user.pushes || 0,
-          winRate,
-        };
-      });
+      .take(limit);
   },
 });
 
-// Update user stats when bet is graded
 export const updateUserStats = internalMutation({
   args: {
     userId: v.id("users"),
     betResult: v.union(v.literal("won"), v.literal("lost"), v.literal("push")),
-    profitLoss: v.number(), // Positive for wins, negative for losses, zero for pushes
+    profitLoss: v.number(),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("User not found");
 
-    const updates: any = {
-      lifetimeProfit: (user.lifetimeProfit || 0) + args.profitLoss,
-      totalBets: (user.totalBets || 0) + 1,
+    const updates: {
+      lifetimeProfit: number;
+      totalBets: number;
+      wins?: number;
+      losses?: number;
+      pushes?: number;
+    } = {
+      lifetimeProfit: user.lifetimeProfit + args.profitLoss,
+      totalBets: user.totalBets + 1,
     };
 
     if (args.betResult === "won") {
-      updates.wins = (user.wins || 0) + 1;
+      updates.wins = user.wins + 1;
     } else if (args.betResult === "lost") {
-      updates.losses = (user.losses || 0) + 1;
+      updates.losses = user.losses + 1;
     } else if (args.betResult === "push") {
-      updates.pushes = (user.pushes || 0) + 1;
+      updates.pushes = user.pushes + 1;
     }
 
     await ctx.db.patch(args.userId, updates);
   },
 });
+

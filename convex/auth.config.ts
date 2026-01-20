@@ -6,6 +6,6 @@ export default {
     },
   ],
   session: {
-    absoluteTimeout: 24 * 60 * 60 * 1000, // 24 hours
+    absoluteTimeout: 24 * 60 * 60 * 1000,
   },
 };

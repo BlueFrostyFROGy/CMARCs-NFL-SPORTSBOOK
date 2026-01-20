@@ -1,179 +1,102 @@
-import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { supabase, type Database } from "../lib/supabase";
 
-export function Dashboard() {
-  const user = useQuery(api.users.getCurrentUser);
-  const bets = useQuery(api.bets.getUserBets, user ? { userId: user._id } : "skip");
-  const [activeTab, setActiveTab] = useState<"open" | "settled">("open");
+type UserRow = Database["public"]["Tables"]["users"]["Row"];
+type BetRow = Database["public"]["Tables"]["bets"]["Row"];
 
-  if (!user || !bets) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="grid grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-24 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+interface DashboardProps {
+  user: UserRow;
+}
 
-  const openBets = bets.filter(bet => bet.status === "pending");
-  const settledBets = bets.filter(bet => bet.status !== "pending");
-  
-  const totalBets = bets.length;
-  const wonBets = bets.filter(bet => bet.status === "won").length;
-  const lostBets = bets.filter(bet => bet.status === "lost").length;
-  const pushBets = bets.filter(bet => bet.status === "push").length;
-  
-  const totalStaked = bets.reduce((sum, bet) => sum + bet.stake, 0);
-  const totalWon = bets
-    .filter(bet => bet.status === "won")
-    .reduce((sum, bet) => sum + bet.potentialPayout, 0);
-  const totalRefunded = bets
-    .filter(bet => bet.status === "push")
-    .reduce((sum, bet) => sum + bet.stake, 0);
-  
-  const netProfit = totalWon + totalRefunded - totalStaked;
-  const winRate = totalBets > 0 ? ((wonBets / (totalBets - pushBets)) * 100) : 0;
+export function Dashboard({ user }: DashboardProps) {
+  const [bets, setBets] = useState<BetRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const formatOdds = (odds: number) => {
-    return odds > 0 ? `+${odds}` : `${odds}`;
-  };
+  useEffect(() => {
+    supabase
+      .from("bets")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        setBets(data ?? []);
+        setLoading(false);
+      });
+  }, [user.id]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "won": return "text-green-600 bg-green-100";
-      case "lost": return "text-red-600 bg-red-100";
-      case "push": return "text-yellow-600 bg-yellow-100";
-      case "pending": return "text-blue-600 bg-blue-100";
-      default: return "text-gray-600 bg-gray-100";
-    }
-  };
+  const { openBets, settledBets, totalStaked, totalWon, winRate } = useMemo(() => {
+    const open = bets.filter(b => !b.settled);
+    const settled = bets.filter(b => b.settled);
+    const staked = bets.reduce((sum, bet) => sum + Number(bet.amount || 0), 0);
+    const won = settled.filter(b => b.result === "won").length;
+    const totalSettled = settled.length;
+    const rate = totalSettled > 0 ? (won / totalSettled) * 100 : 0;
+    const totalWonAmount = settled
+      .filter(b => b.result === "won")
+      .reduce((sum, bet) => sum + Number(bet.amount || 0) * Math.abs(Number(bet.odds) ?? 0) / 100, 0);
+    return {
+      openBets: open,
+      settledBets: settled,
+      totalStaked: staked,
+      totalWon: totalWonAmount,
+      winRate: rate,
+    };
+  }, [bets]);
+
+  const formatOdds = (odds: number) => (odds > 0 ? `+${odds}` : `${odds}`);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold mb-2">Dashboard</h1>
+        <p className="text-gray-600">Stats and recent bets from Supabase.</p>
+      </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg border">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">Current Balance</h3>
-          <p className="text-2xl font-bold text-green-600">
-            ${(user.virtualBalance || 0).toLocaleString()}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-lg border">
+          <p className="text-sm text-gray-600">Balance</p>
+          <p className="text-2xl font-bold text-green-600">${Number(user.virtual_balance || 0).toLocaleString()}</p>
+        </div>
+        <div className="bg-white p-4 rounded-lg border">
+          <p className="text-sm text-gray-600">Lifetime Profit</p>
+          <p className={`text-2xl font-bold ${Number(user.lifetime_profit) >= 0 ? "text-green-600" : "text-red-600"}`}>
+            {Number(user.lifetime_profit) >= 0 ? "+" : ""}{Number(user.lifetime_profit).toFixed(2)}
           </p>
         </div>
-        
-        <div className="bg-white p-6 rounded-lg border">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">Net Profit/Loss</h3>
-          <p className={`text-2xl font-bold ${netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
-            {netProfit >= 0 ? "+" : ""}${netProfit.toFixed(2)}
-          </p>
+        <div className="bg-white p-4 rounded-lg border">
+          <p className="text-sm text-gray-600">Win Rate</p>
+          <p className="text-2xl font-bold text-blue-600">{winRate.toFixed(1)}%</p>
         </div>
-        
-        <div className="bg-white p-6 rounded-lg border">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">Win Rate</h3>
-          <p className="text-2xl font-bold text-blue-600">
-            {winRate.toFixed(1)}%
-          </p>
-          <p className="text-sm text-gray-500">
-            {wonBets}W - {lostBets}L - {pushBets}P
-          </p>
-        </div>
-        
-        <div className="bg-white p-6 rounded-lg border">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">Total Wagered</h3>
-          <p className="text-2xl font-bold text-gray-800">
-            ${totalStaked.toFixed(2)}
-          </p>
-          <p className="text-sm text-gray-500">
-            {totalBets} bet{totalBets !== 1 ? "s" : ""}
-          </p>
+        <div className="bg-white p-4 rounded-lg border">
+          <p className="text-sm text-gray-600">Total Staked</p>
+          <p className="text-2xl font-bold text-gray-900">${totalStaked.toFixed(2)}</p>
         </div>
       </div>
 
-      {/* Bet History */}
       <div className="bg-white rounded-lg border">
-        <div className="border-b">
-          <div className="flex">
-            <button
-              onClick={() => setActiveTab("open")}
-              className={`px-6 py-4 font-medium ${
-                activeTab === "open"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
-            >
-              Open Bets ({openBets.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("settled")}
-              className={`px-6 py-4 font-medium ${
-                activeTab === "settled"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-800"
-              }`}
-            >
-              Settled Bets ({settledBets.length})
-            </button>
-          </div>
+        <div className="border-b px-6 py-4">
+          <h2 className="text-lg font-semibold">Recent Bets</h2>
         </div>
-
         <div className="p-6">
-          {(activeTab === "open" ? openBets : settledBets).length === 0 ? (
-            <div className="text-center text-gray-500 py-8">
-              <p>No {activeTab} bets found</p>
+          {loading ? (
+            <div className="animate-pulse space-y-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-16 bg-gray-200 rounded"></div>
+              ))}
             </div>
+          ) : bets.length === 0 ? (
+            <div className="text-center text-gray-500">No bets yet.</div>
           ) : (
-            <div className="space-y-4">
-              {(activeTab === "open" ? openBets : settledBets).map(bet => (
-                <div key={bet._id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(bet.status)}`}>
-                        {bet.status.toUpperCase()}
-                      </span>
-                      <span className="ml-2 text-sm text-gray-600">
-                        {bet.type.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-600">
-                        Stake: ${bet.stake.toFixed(2)}
-                      </div>
-                      <div className="text-sm font-medium">
-                        Potential: ${bet.potentialPayout.toFixed(2)}
-                      </div>
-                    </div>
+            <div className="space-y-3">
+              {bets.slice(0, 10).map(bet => (
+                <div key={bet.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <div className="text-sm text-gray-700">{bet.prediction.toUpperCase()} @ {formatOdds(Number(bet.odds))}</div>
+                    <div className="text-xs text-gray-500">Prop: {bet.prop_id} · Game: {bet.game_id}</div>
                   </div>
-
-                  <div className="space-y-2">
-                    {bet.legs.map((leg, index) => (
-                      <div key={index} className="text-sm bg-gray-50 p-2 rounded">
-                        <div className="font-medium">
-                          {leg.game?.awayTeam} @ {leg.game?.homeTeam}
-                        </div>
-                        <div className="text-gray-600">
-                          {leg.prop?.playerName} - {leg.prop?.propType.replace('_', ' ')}
-                        </div>
-                        <div>
-                          {leg.side === "over" ? "Over" : "Under"} {leg.prop?.lineValue} ({formatOdds(leg.odds)})
-                          {leg.legResult !== "pending" && (
-                            <span className={`ml-2 px-1 py-0.5 rounded text-xs ${getStatusColor(leg.legResult)}`}>
-                              {leg.legResult.toUpperCase()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-3 text-xs text-gray-500">
-                    Placed: {new Date(bet._creationTime).toLocaleString()}
+                  <div className="text-right text-sm text-gray-700">
+                    <div>Stake: ${Number(bet.amount).toFixed(2)}</div>
+                    <div className="text-xs text-gray-500">{new Date(bet.created_at ?? "").toLocaleString()}</div>
                   </div>
                 </div>
               ))}

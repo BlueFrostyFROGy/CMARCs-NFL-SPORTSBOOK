@@ -1,13 +1,7 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-export const getAllGames = query({
-  handler: async (ctx) => {
-    return await ctx.db.query("games").collect();
-  },
-});
-
-export const getGame = query({
+export const getGameById = query({
   args: { gameId: v.id("games") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.gameId);
@@ -21,6 +15,12 @@ export const getGameByExternalId = query({
       .query("games")
       .withIndex("by_external_id", (q) => q.eq("externalId", args.externalId))
       .first();
+  },
+});
+
+export const getAllGames = query({
+  handler: async (ctx) => {
+    return await ctx.db.query("games").collect();
   },
 });
 

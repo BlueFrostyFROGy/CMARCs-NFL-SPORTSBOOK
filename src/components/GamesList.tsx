@@ -1,33 +1,32 @@
-import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
-import { Id } from "../../convex/_generated/dataModel";
+import { useEffect, useState } from "react";
+import { supabase, type Database } from "../lib/supabase";
+
+type GameRow = Database["public"]["Tables"]["games"]["Row"];
 
 interface GamesListProps {
-  selectedGameId: Id<"games"> | null;
-  onSelectGame: (gameId: Id<"games">) => void;
+  selectedGameId: string | null;
+  onSelectGame: (gameId: string) => void;
 }
 
 export function GamesList({ selectedGameId, onSelectGame }: GamesListProps) {
-  const games = useQuery(api.games.listGames);
+  const [games, setGames] = useState<GameRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (!games) {
-    return (
-      <div className="p-4">
-        <div className="animate-pulse space-y-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-20 bg-gray-200 rounded"></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    supabase
+      .from("games")
+      .select("*")
+      .order("start_time", { ascending: true })
+      .then(({ data }) => {
+        setGames(data ?? []);
+        setLoading(false);
+      });
+  }, []);
 
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+  const formatDate = (isoString: string) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
   };
 
   const getStatusColor = (status: string) => {
@@ -42,8 +41,14 @@ export function GamesList({ selectedGameId, onSelectGame }: GamesListProps) {
   return (
     <div className="p-4">
       <h2 className="text-lg font-semibold mb-4">NFL Games</h2>
-      
-      {games.length === 0 ? (
+
+      {loading ? (
+        <div className="animate-pulse space-y-4">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-20 bg-gray-200 rounded"></div>
+          ))}
+        </div>
+      ) : games.length === 0 ? (
         <div className="text-center text-gray-500 py-8">
           <p>No games available</p>
           <p className="text-sm mt-1">Check back later or contact admin</p>
@@ -52,24 +57,24 @@ export function GamesList({ selectedGameId, onSelectGame }: GamesListProps) {
         <div className="space-y-2">
           {games.map(game => (
             <button
-              key={game._id}
-              onClick={() => onSelectGame(game._id)}
+              key={game.id}
+              onClick={() => onSelectGame(game.id)}
               className={`w-full p-3 rounded-lg border text-left transition-colors ${
-                selectedGameId === game._id
+                selectedGameId === game.id
                   ? "border-blue-500 bg-blue-50"
                   : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
               }`}
             >
               <div className="flex justify-between items-start mb-2">
                 <div className="font-medium">
-                  {game.awayTeam} @ {game.homeTeam}
+                  {game.away_team} @ {game.home_team}
                 </div>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(game.status)}`}>
-                  {game.status.toUpperCase()}
+                  {game.status?.toUpperCase()}
                 </span>
               </div>
               <div className="text-sm text-gray-600">
-                {formatDate(game.startTime)}
+                {formatDate(game.start_time)}
               </div>
             </button>
           ))}

@@ -7,6 +7,7 @@ export const getUserBets = query({
     return await ctx.db
       .query("bets")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
       .collect();
   },
 });
@@ -104,15 +105,5 @@ export const getBet = query({
   args: { betId: v.id("bets") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.betId);
-  },
-});
-
-export const getPublicBetFeed = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("publicBets")
-      .order("desc")
-      .take(args.limit || 50);
   },
 });

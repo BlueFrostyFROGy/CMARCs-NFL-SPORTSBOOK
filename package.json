@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npm-run-all --parallel dev:frontend dev:backend",
+    "dev": "npm run dev:frontend",
     "dev:frontend": "vite --open",
     "dev:backend": "convex dev",
     "build": "vite build",
@@ -12,8 +12,9 @@
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.80",
+    "@supabase/auth-helpers-react": "^0.15.0",
+    "@supabase/supabase-js": "^2.90.1",
     "clsx": "^2.1.1",
-    "convex": "^1.31.2",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "sonner": "^2.0.3",
@@ -26,6 +27,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "~10",
+    "convex": "^1.31.5",
     "dotenv": "^16.4.7",
     "eslint": "^9.21.0",
     "eslint-plugin-react-hooks": "^5.1.0",
